@@ -42,29 +42,35 @@ def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
         print(fp)
         filename = str(fp).split('\\')[3].split('_')[0]
 
+        # 1- Clip
         print("reading rgb images")
+        print("clipping images for {}".format(filename))
         raster_src_post, rgb_post = readRGBImg(fp)
-        raster_src_pre, rgb_pre = readRGBImg(fps_pre[i])
 
         print("retrieving starting indices")
         indices_post = indicesDG(rgb_post)
 
-        print("reading sent2 images")
-        raster_src_post_b08, b08_post = readOneImg(fp_s2_post)
-        raster_src_pre_b08, b08_pre = readOneImg(fp_s2_pre)
-
-        print("clipping images for {}".format(filename))
-        # 1- Clip
         bbox_post = indicesToBBOX(indices_post, raster_src_post)
         out_img_post, out_img_transform = clipImg(bbox_post, raster_src_post, proj=4326)
+        rgb_post = None
+
+        raster_src_pre, rgb_pre = readRGBImg(fps_pre[i])
         out_img_pre, out_img_transform_pre = clipImg(bbox_post, raster_src_pre, proj=4326)
+        rgb_pre = None
+
+        print("reading sent2 images")
+        raster_src_post_b08, b08_post = readOneImg(fp_s2_post)
         out_img_pre_b08, out_img_transform_pre_b08 = clipImg(bbox_post, raster_src_pre_b08, proj=4326)
+        b08_pre = None
+
+        raster_src_pre_b08, b08_pre = readOneImg(fp_s2_pre)
         out_img_post_b08, out_img_transform_post_b08 = clipImg(bbox_post, raster_src_post_b08, proj=4326)
+        b08_post = None
 
         print("chunk image")
         # 2- Segment, Vectorize, save to file
         chunkindices = chunkImageIndices(out_img_post)
-        for chunkindextup in chunkindices:
+        for i, chunkindextup in enumerate(chunkindices):
             print("starting segmentation...")
             # Segment
             img_chunk_post = out_img_post[chunkindextup[0]:chunkindextup[1], chunkindextup[2]:chunkindextup[3], :]
@@ -74,12 +80,15 @@ def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
             print("vectorizing...")
             # Vectorize
             gdf = vectorizeSegments(segments, img_chunk_post, img_chunk_pre, out_img_transform, out_img_post_b08, out_img_pre_b08, out_img_transform_post_b08)
+            img_chunk_post = None
+            img_chunk_pre = None
+            segments = None
 
             print("adding SIs to gdf")
             #add SIs
             gdf = addSIs2DF(gdf)
 
-            gdf_filename = "./data/segments_{}.geojson".format(filename)
+            gdf_filename = "./data/segments_{}_{}.geojson".format(filename, i)
             print("writing to destionation: {}".format(gdf_filename))
             #write to file
             gdf.to_file(gdf_filename, driver="GeoJSON")
@@ -252,6 +261,8 @@ def indicesDG(img):
     end_x = indices[0][indices[0].shape[0]-1]
     beg_y = indices[1][0]
     end_y = indices[1][indices[1].shape[0]-1]
+    indices = None
+
     return [beg_x, end_x, beg_y, end_y]
 
 def readOneImg(datapath, driver="GTiff"):
