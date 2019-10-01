@@ -21,8 +21,192 @@ from shapely.geometry import box
 import geopandas as gpd
 from fiona.crs import from_epsg
 from pyproj import Proj, transform
+from functools import partial
+import pyproj
+from shapely.ops import transform
+from rasterstats import zonal_stats
+import itertools
+from skimage.segmentation import slic, felzenszwalb
+from skimage.segmentation import mark_boundaries
+from skimage.measure import label, regionprops
+import shapely
+from shapely.wkt import loads
+from shapely.geometry import Polygon, mapping, shape, MultiPolygon, box
+from rasterio import features
+import geopandas as gpd
+import pandas as pd
+
+def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
+    print("Writing to data...")
+    for i, fp in enumerate(fps_post):
+        print(fp)
+        filename = str(fp).split('\\')[3].split('_')[0]
+
+        print("reading rgb images")
+        raster_src_post, rgb_post = readRGBImg(fp)
+        raster_src_pre, rgb_pre = readRGBImg(fps_pre[i])
+
+        print("retrieving starting indices")
+        indices_post = indicesDG(rgb_post)
+
+        print("reading sent2 images")
+        raster_src_post_b08, b08_post = readOneImg(fp_s2_post)
+        raster_src_pre_b08, b08_pre = readOneImg(fp_s2_pre)
+
+        print("clipping images for {}".format(filename))
+        # 1- Clip
+        bbox_post = indicesToBBOX(indices_post, raster_src_post)
+        out_img_post, out_img_transform = clipImg(bbox_post, raster_src_post, proj=4326)
+        out_img_pre, out_img_transform_pre = clipImg(bbox_post, raster_src_pre, proj=4326)
+        out_img_pre_b08, out_img_transform_pre_b08 = clipImg(bbox_post, raster_src_pre_b08, proj=4326)
+        out_img_post_b08, out_img_transform_post_b08 = clipImg(bbox_post, raster_src_post_b08, proj=4326)
+
+        print("chunk image")
+        # 2- Segment, Vectorize, save to file
+        chunkindices = chunkImageIndices(out_img_post)
+        for chunkindextup in chunkindices:
+            print("starting segmentation...")
+            # Segment
+            img_chunk_post = out_img_post[chunkindextup[0]:chunkindextup[1], chunkindextup[2]:chunkindextup[3], :]
+            img_chunk_pre = out_img_pre[chunkindextup[0]:chunkindextup[1], chunkindextup[2]:chunkindextup[3], :]
+            segments = segmentToLabels(img_chunk_pre, n_segments=5000, compactness=10)
+
+            print("vectorizing...")
+            # Vectorize
+            gdf = vectorizeSegments(segments, img_chunk_post, img_chunk_pre, out_img_transform, out_img_post_b08, out_img_pre_b08, out_img_transform_post_b08)
+
+            print("adding SIs to gdf")
+            #add SIs
+            gdf = addSIs2DF(gdf)
+
+            gdf_filename = "./data/segments_{}.geojson".format(filename)
+            print("writing to destionation: {}".format(gdf_filename))
+            #write to file
+            gdf.to_file(gdf_filename, driver="GeoJSON")
 
 
+
+def addChangedSIToDFhelper(gdf, SI_combos):
+    # now, add dSIs to dataframe
+    for i, tup in enumerate(SI_combos):
+        SI_post = tup[0]
+        SI_pre = tup[1]
+        col_name = "dSI_" + SI_post.split('_')[1]
+        gdf[col_name] = changedSI(gdf[SI_pre], gdf[SI_post])
+    return gdf
+
+def addSIToDFhelper(gdf, perm, tag="_post"):
+    SI_keys = []
+    for i, tup in enumerate(perm):
+        b1 = tup[0]
+        b2 = tup[1]
+        col_name = "SI_" + b1[0] + b2[0] + tag
+        SI_keys.append(col_name)
+        gdf[col_name] = computeSI(gdf[b1], gdf[b2])
+    return gdf, SI_keys
+
+def addSIs2DF(gdf):
+    # convert the keys to list
+    post_keys = ['blue_value', 'green_value', 'red_value', 'nir_value']
+    pre_keys = ['blue_value_pre', 'green_value_pre', 'red_value_pre', 'nir_value_pre']
+
+    perm = itertools.permutations(post_keys, 2)
+    perm_pre = itertools.permutations(pre_keys, 2)
+
+    gdf, SI_keys_post = addSIToDFhelper(gdf, perm, tag="_post")
+    gdf, SI_keys_pre = addSIToDFhelper(gdf, perm_pre, tag="_pre")
+
+    SI_keys = SI_keys_pre + SI_keys_post
+    band_combos = list(set([key.split('_')[1] for key in SI_keys_post]))
+    SI_combos = [tuple([s for s in SI_keys if bcombostr in s]) for bcombostr in band_combos]
+
+    gdf = addChangedSIToDFhelper(gdf, SI_combos)
+
+    gdf['land_class'] = np.nan
+    gdf['burn_class'] = np.nan
+
+    return gdf
+
+def computeSI(b1, b2):
+    return (b1-b2)/(b1+b2)
+
+def changedSI(SI_pre, SI_post):
+    return SI_pre - SI_post
+
+def projectPolygons(gdf, label, inproj='epsg:4326', outproj='epsg:32610'):
+    project = partial(
+        pyproj.transform,
+        pyproj.Proj(init=inproj),  # source coordinate system
+        pyproj.Proj(init=outproj))  # destination coordinate system
+
+    g1 = gdf.loc[gdf['seg_index'] == label, 'geometry'].iloc[0]
+    g2 = transform(project, g1)  # apply projection
+
+    return g2
+
+def vectorizeSegments(segment_labels, img_chunk_post, img_chunk_pre, transform, b8_post, b8_pre, b8_transform):
+    shapes_list = [{'seg_index': int(v), 'geometry': loads(shape(g).wkt)} for g, v in
+                   features.shapes(segment_labels.astype(np.uint16), mask=None, transform=transform)]
+    gdf = gpd.GeoDataFrame(shapes_list)
+    gdf.crs = {'init': 'EPSG:4326'}
+    gdf = gdf[gdf['seg_index'] != 0] #remove the 0 label
+
+    ## use regionprops onn segments to extract properties for dataframe
+    # post
+    regions_red = regionprops(segment_labels, img_chunk_post)
+    regions_blue = regionprops(segment_labels, img_chunk_post)
+    regions_green = regionprops(segment_labels, img_chunk_post)
+
+    # pre
+    regions_red_pre = regionprops(segment_labels, img_chunk_pre)
+    regions_blue_pre = regionprops(segment_labels, img_chunk_pre)
+    regions_green_pre = regionprops(segment_labels, img_chunk_pre)
+
+    region_spectrals = []
+    for i in range(len(regions_red)):
+        seg_label = regions_red[i].label
+        g2 = projectPolygons(gdf, seg_label)
+
+        nir_zone_post = zonal_stats(g2, b8_post[0], affine=b8_transform, stats='mean',
+                                    nodata=-999)
+        nir_zone_pre = zonal_stats(g2, b8_pre[0], affine=b8_transform, stats='mean', nodata=-999)
+
+        dict_seg = {'seg_index': regions_red[i].label,
+                    'red_value': regions_red[i].mean_intensity,
+                    'blue_value': regions_blue[i].mean_intensity,
+                    'green_value': regions_green[i].mean_intensity,
+                    'nir_value': nir_zone_post[0]['mean'],
+                    'red_value_pre': regions_red_pre[i].mean_intensity,
+                    'blue_value_pre': regions_blue_pre[i].mean_intensity,
+                    'green_value_pre': regions_green_pre[i].mean_intensity,
+                    'nir_value_pre': nir_zone_pre[0]['mean'],
+                    'area_m': regions_red[i].area * 0.31}  # area in meters
+        region_spectrals.append(dict_seg)
+
+    df = pd.DataFrame(region_spectrals)
+    gdf2 = pd.merge(gdf, df, on='seg_index')
+
+    return gdf2
+
+def segmentToLabels(img_chunk, n_segments=5000, compactness=10):
+    """ Convert img to segments and return image chunk with it."""
+    segments_slic = slic(img_chunk, n_segments=n_segments, compactness=compactness)
+    print('SLIC number of segments: {}'.format(len(np.unique(segments_slic))))
+
+    return segments_slic
+
+
+def chunkImageIndices(img):
+    """return list of tuples with indices for image chunk"""
+    chunksize = (img.shape[0]//2, img.shape[0]//2)
+
+    #list of tuples (begx, endx, begy, endy)
+    indices = [(0, chunksize[0], 0, chunksize[1]),
+               (chunksize[0], img.shape[0], 0, chunksize[1]),
+               (0, chunksize[0], chunksize[1], img.shape[1]),
+               (chunksize[0], img.shape[0], chunksize[1], img.shape[1])
+               ]
+    return indices
 
 # https://automating-gis-processes.github.io/CSC18/lessons/L6/clipping-raster.html
 def getFeatures(gdf):
@@ -103,23 +287,3 @@ def readRGBImg(datapath, driver="GTiff"):
     b = src_img.read(3)
 
     return src_img, np.dstack((r, g, b))
-
-# def imshowBBOX(im, bbox=[], title=""):
-#     """ Shows image to a zoomed spatial extent.
-#     Parameters:
-#         im : ndarray
-#             The image read and loaded by rasterio.
-#         bbox : list
-#             [minx, miny, maxx, maxy] in coordinates of the image CRS.
-#         title : String
-#             title for the figure
-#     """
-#
-#     bbox_gdf = gpd.GeoDataFrame()
-#     bbox_gdf.loc[0, 'geometry'] = box(*bbox)
-#
-#     fig, ax = plt.subplots(figsize=(8,3))
-#     ep.plot_rgb(im, extent=bbox, title=title, ax=ax)
-#     ax.set_xlim(bbox[0], bbox[2])
-#     ax.set_ylim(bbox[1], bbox[3])
-#     plt.show()
