@@ -22,13 +22,15 @@ import geopandas as gpd
 from fiona.crs import from_epsg
 from pyproj import Proj, transform
 
+
+
 # https://automating-gis-processes.github.io/CSC18/lessons/L6/clipping-raster.html
 def getFeatures(gdf):
     """Function to parse features from GeoDataFrame in such a manner that rasterio wants them"""
     import json
     return [json.loads(gdf.to_json())['features'][0]['geometry']]
 
-def clipImg(bbox, src_img, proj=4326):
+def clipImg(bbox, src_img, proj=4326, isOneBand=False):
     """ Clip image to bbox and output new numpy img matrix. Return transform as well."""
 
     geo = gpd.GeoDataFrame({'geometry': bbox}, index=[0], crs=from_epsg(proj))
@@ -36,7 +38,8 @@ def clipImg(bbox, src_img, proj=4326):
     coords = getFeatures(geo)
     out_img, out_transform = mask(src_img, shapes=coords, crop=True)
 
-    out_img = np.dstack((out_img[0], out_img[1], out_img[2]))
+    if isOneBand:
+        out_img = np.dstack((out_img[0], out_img[1], out_img[2]))
 
     return out_img, out_transform
 
