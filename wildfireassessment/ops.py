@@ -35,6 +35,7 @@ from shapely.geometry import Polygon, mapping, shape, MultiPolygon, box
 from rasterio import features
 import geopandas as gpd
 import pandas as pd
+import time
 
 def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
     print("Writing to data...")
@@ -53,19 +54,24 @@ def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
         bbox_post = indicesToBBOX(indices_post, raster_src_post)
         out_img_post, out_img_transform = clipImg(bbox_post, raster_src_post, proj=4326)
         rgb_post = None
+        time.sleep(5)
 
         raster_src_pre, rgb_pre = readRGBImg(fps_pre[i])
-        out_img_pre, out_img_transform_pre = clipImg(bbox_post, raster_src_pre, proj=4326)
-        rgb_pre = None
+        out_img_pre_b08, out_img_transform_pre_b08 = clipImg(bbox_post, raster_src_pre_b08, proj=4326)
+        b08_pre = None
+        time.sleep(5)
 
         print("reading sent2 images")
         raster_src_post_b08, b08_post = readOneImg(fp_s2_post)
-        out_img_pre_b08, out_img_transform_pre_b08 = clipImg(bbox_post, raster_src_pre_b08, proj=4326)
-        b08_pre = None
+        out_img_pre, out_img_transform_pre = clipImg(bbox_post, raster_src_pre, proj=4326)
+        rgb_pre = None
+        time.sleep(5)
+
 
         raster_src_pre_b08, b08_pre = readOneImg(fp_s2_pre)
         out_img_post_b08, out_img_transform_post_b08 = clipImg(bbox_post, raster_src_post_b08, proj=4326)
         b08_post = None
+        time.sleep(5)
 
         print("chunk image")
         # 2- Segment, Vectorize, save to file
@@ -83,6 +89,7 @@ def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
             img_chunk_post = None
             img_chunk_pre = None
             segments = None
+            time.sleep(5)
 
             print("adding SIs to gdf")
             #add SIs
