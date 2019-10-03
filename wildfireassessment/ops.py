@@ -1,7 +1,7 @@
 """
     Author: Ai-Linh Alten
     Date created: 9/23/2019
-    Date last modified: 9/24/2019
+    Date last modified: 10/2/2019
     Python Version: 3.6.5
 
     This is a series of operations for Wildfire Damage Assessment project.
@@ -9,33 +9,22 @@
 """
 import rasterio
 from rasterio.transform import xy
-from rasterio.plot import show, show_hist
 from rasterio.mask import mask
-import matplotlib.pyplot as plt
-from pathlib import Path
-import os
-import earthpy as et
-import earthpy.plot as ep
 import numpy as np
-from shapely.geometry import box
-import geopandas as gpd
 from fiona.crs import from_epsg
-from pyproj import Proj, transform
+from pyproj import transform
 from functools import partial
 import pyproj
 from shapely.ops import transform
 from rasterstats import zonal_stats
 import itertools
 from skimage.segmentation import slic, felzenszwalb
-from skimage.segmentation import mark_boundaries
-from skimage.measure import label, regionprops
-import shapely
+from skimage.measure import regionprops
 from shapely.wkt import loads
-from shapely.geometry import Polygon, mapping, shape, MultiPolygon, box
+from shapely.geometry import shape, box
 from rasterio import features
 import geopandas as gpd
 import pandas as pd
-import time
 
 def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
     print("Writing to data...")
@@ -43,63 +32,77 @@ def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
         print(fp)
         filename = str(fp).split('\\')[3].split('_')[0]
 
-        # 1- Clip
-        print("reading rgb images")
-        print("clipping images for {}".format(filename))
+        print("reading clipped rgb images for {}".format(filename))
         raster_src_post, rgb_post = readRGBImg(fp)
-
-        print("retrieving starting indices")
-        indices_post = indicesDG(rgb_post)
-
-        bbox_post = indicesToBBOX(indices_post, raster_src_post)
-        out_img_post, out_img_transform = clipImg(bbox_post, raster_src_post, proj=4326)
-        rgb_post = None
-        time.sleep(5)
-
         raster_src_pre, rgb_pre = readRGBImg(fps_pre[i])
-        out_img_pre_b08, out_img_transform_pre_b08 = clipImg(bbox_post, raster_src_pre_b08, proj=4326)
-        b08_pre = None
-        time.sleep(5)
 
-        print("reading sent2 images")
+        # bounds of the WorldView images
+        bbox = box(raster_src_post.bounds.left, raster_src_post.bounds.bottom, raster_src_post.bounds.right,
+                        raster_src_post.bounds.top)
+
+        print("reading and clipping sent2 images")
         raster_src_post_b08, b08_post = readOneImg(fp_s2_post)
-        out_img_pre, out_img_transform_pre = clipImg(bbox_post, raster_src_pre, proj=4326)
-        rgb_pre = None
-        time.sleep(5)
-
+        out_img_post_b08, out_img_transform_post_b08, out_post_meta= clipImg(bbox, raster_src_post_b08, proj=4326)
+        b08_post = None
 
         raster_src_pre_b08, b08_pre = readOneImg(fp_s2_pre)
-        out_img_post_b08, out_img_transform_post_b08 = clipImg(bbox_post, raster_src_post_b08, proj=4326)
-        b08_post = None
-        time.sleep(5)
+        out_img_pre_b08, out_img_transform_pre_b08, out_pre_meta = clipImg(bbox, raster_src_pre_b08, proj=4326)
+        b08_pre = None
 
         print("chunk image")
         # 2- Segment, Vectorize, save to file
-        chunkindices = chunkImageIndices(out_img_post)
+        chunkindices = chunkImageIndices(rgb_post)
         for i, chunkindextup in enumerate(chunkindices):
-            print("starting segmentation...")
-            # Segment
-            img_chunk_post = out_img_post[chunkindextup[0]:chunkindextup[1], chunkindextup[2]:chunkindextup[3], :]
-            img_chunk_pre = out_img_pre[chunkindextup[0]:chunkindextup[1], chunkindextup[2]:chunkindextup[3], :]
+            print("starting segmentation for chunk {}".format(i))
+            img_chunk_post = rgb_post[chunkindextup[0]:chunkindextup[1], chunkindextup[2]:chunkindextup[3], :]
+            img_chunk_pre = rgb_pre[chunkindextup[0]:chunkindextup[1], chunkindextup[2]:chunkindextup[3], :]
             segments = segmentToLabels(img_chunk_pre, n_segments=5000, compactness=10)
 
             print("vectorizing...")
             # Vectorize
-            gdf = vectorizeSegments(segments, img_chunk_post, img_chunk_pre, out_img_transform, out_img_post_b08, out_img_pre_b08, out_img_transform_post_b08)
+            gdf = vectorizeSegments(segments, img_chunk_post, img_chunk_pre, raster_src_post.transform, out_img_post_b08, out_img_pre_b08, out_img_transform_post_b08)
             img_chunk_post = None
             img_chunk_pre = None
             segments = None
-            time.sleep(5)
 
             print("adding SIs to gdf")
             #add SIs
             gdf = addSIs2DF(gdf)
 
             gdf_filename = "./data/segments_{}_{}.geojson".format(filename, i)
-            print("writing to destionation: {}".format(gdf_filename))
+            print("writing to destination: {}".format(gdf_filename))
             #write to file
             gdf.to_file(gdf_filename, driver="GeoJSON")
 
+def writeClippedHelper(img, img_transform, img_meta, filename):
+    trueColor = rasterio.open(filename, 'w', **img_meta)
+    trueColor.write(img[2], 3) #blue
+    trueColor.write(img[1], 2) #green
+    trueColor.write(img[0], 1) #red
+    trueColor.close()
+
+
+def writeClipped(fps, fps_pre):
+
+    for i, fp in enumerate(fps):
+        filepath_post = fp.parent
+        filename_post = fp.name.replace("clipped", "clip")
+        filepath_pre = fps_pre[i].parent
+        filename_pre = fps_pre[i].name.replace("clipped", "clip")
+
+        raster_src_post, rgb_post = readRGBImg(fp)
+        indices_post = indicesDG(rgb_post) #calculate indices from nonzero
+        rgb_post = None
+        bbox_post = indicesToBBOX(indices_post, raster_src_post) # make bbox
+        out_img_post, out_img_transform, out_meta = clipImg(bbox_post, raster_src_post, proj=4326)
+        writeClippedHelper(out_img_post, out_img_transform, out_meta, filepath_post / filename_post)
+        out_img_post, out_img_transform, out_meta = None, None, None
+
+        raster_src_pre, rgb_pre = readRGBImg(fps_pre[i])
+        rgb_pre = None
+        out_img_pre, out_img_transform, out_meta = clipImg(bbox_post, raster_src_pre, proj=4326)
+        writeClippedHelper(out_img_pre, out_img_transform, out_meta, filepath_pre / filename_pre)
+        out_img_post, out_img_transform, out_meta = None, None, None
 
 
 def addChangedSIToDFhelper(gdf, SI_combos):
@@ -169,14 +172,14 @@ def vectorizeSegments(segment_labels, img_chunk_post, img_chunk_pre, transform, 
 
     ## use regionprops onn segments to extract properties for dataframe
     # post
-    regions_red = regionprops(segment_labels, img_chunk_post)
-    regions_blue = regionprops(segment_labels, img_chunk_post)
-    regions_green = regionprops(segment_labels, img_chunk_post)
+    regions_red = regionprops(segment_labels, img_chunk_post[:,:,0])
+    regions_blue = regionprops(segment_labels, img_chunk_post[:,:,1])
+    regions_green = regionprops(segment_labels, img_chunk_post[:,:,2])
 
     # pre
-    regions_red_pre = regionprops(segment_labels, img_chunk_pre)
-    regions_blue_pre = regionprops(segment_labels, img_chunk_pre)
-    regions_green_pre = regionprops(segment_labels, img_chunk_pre)
+    regions_red_pre = regionprops(segment_labels, img_chunk_pre[:,:,0])
+    regions_blue_pre = regionprops(segment_labels, img_chunk_pre[:,:,1])
+    regions_green_pre = regionprops(segment_labels, img_chunk_pre[:,:,2])
 
     region_spectrals = []
     for i in range(len(regions_red)):
@@ -230,7 +233,7 @@ def getFeatures(gdf):
     import json
     return [json.loads(gdf.to_json())['features'][0]['geometry']]
 
-def clipImg(bbox, src_img, proj=4326, isOneBand=False):
+def clipImg(bbox, src_img, proj=4326):
     """ Clip image to bbox and output new numpy img matrix. Return transform as well."""
 
     geo = gpd.GeoDataFrame({'geometry': bbox}, index=[0], crs=from_epsg(proj))
@@ -238,10 +241,14 @@ def clipImg(bbox, src_img, proj=4326, isOneBand=False):
     coords = getFeatures(geo)
     out_img, out_transform = mask(src_img, shapes=coords, crop=True)
 
-    if isOneBand:
-        out_img = np.dstack((out_img[0], out_img[1], out_img[2]))
+    out_meta = src_img.meta.copy()
+    out_meta.update({'driver': 'GTiff',
+                         'width': out_img.shape[2],
+                         'height': out_img.shape[1],
+                         #  'crs': pycrs.parser.from_epsg_code(epsg_code).to_proj4(),
+                         'transform': out_transform})
 
-    return out_img, out_transform
+    return out_img, out_transform, out_meta
 
 
 def indicesToBBOX(indices, src_img):
