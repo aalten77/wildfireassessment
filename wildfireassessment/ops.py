@@ -1,7 +1,7 @@
 """
     Author: Ai-Linh Alten
     Date created: 9/23/2019
-    Date last modified: 10/2/2019
+    Date last modified: 10/7/2019
     Python Version: 3.6.5
 
     This is a series of operations for Wildfire Damage Assessment project.
