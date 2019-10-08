@@ -25,6 +25,7 @@ from shapely.geometry import shape, box
 from rasterio import features
 import geopandas as gpd
 import pandas as pd
+from affine import Affine
 
 def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
     print("Writing to data...")
@@ -56,11 +57,19 @@ def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
             print("starting segmentation for chunk {}".format(i))
             img_chunk_post = rgb_post[chunkindextup[0]:chunkindextup[1], chunkindextup[2]:chunkindextup[3], :]
             img_chunk_pre = rgb_pre[chunkindextup[0]:chunkindextup[1], chunkindextup[2]:chunkindextup[3], :]
-            segments = segmentToLabels(img_chunk_pre, n_segments=5000, compactness=10)
+            segments = segmentToLabels(img_chunk_pre, n_segments=5000, compactness=15)
+
+            print("translating segments to image chunk location")
+            #add translation to affine for image chunk
+            tup = raster_src_pre.xy(chunkindextup[0], chunkindextup[2]) # get coordinate for top left corner of image chunk
+            tup_origin = raster_src_pre.xy(0, 0) # origin coordinates of image
+            x_trans = abs(tup[0] - tup_origin[0]) # distance x
+            y_trans = abs(tup[1] - tup_origin[1]) # distance y
+            affineTrans = Affine.translation(-x_trans, -y_trans) * raster_src_pre.transform
 
             print("vectorizing...")
             # Vectorize
-            gdf = vectorizeSegments(segments, img_chunk_post, img_chunk_pre, raster_src_post.transform, out_img_post_b08, out_img_pre_b08, out_img_transform_post_b08)
+            gdf = vectorizeSegments(segments, img_chunk_post, img_chunk_pre, affineTrans, out_img_post_b08, out_img_pre_b08, out_img_transform_post_b08)
             img_chunk_post = None
             img_chunk_pre = None
             segments = None
@@ -69,10 +78,10 @@ def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
             #add SIs
             gdf = addSIs2DF(gdf)
 
-            gdf_filename = "./data/segments_{}_{}.geojson".format(filename, i)
+            gdf_filename = "./data/shapefiles/segments_{}_{}_v2.shp".format(filename, i)
             print("writing to destination: {}".format(gdf_filename))
             #write to file
-            gdf.to_file(gdf_filename, driver="GeoJSON")
+            gdf.to_file(gdf_filename)
 
 def writeClippedHelper(img, img_transform, img_meta, filename):
     trueColor = rasterio.open(filename, 'w', **img_meta)
@@ -217,7 +226,7 @@ def segmentToLabels(img_chunk, n_segments=5000, compactness=10):
 
 def chunkImageIndices(img):
     """return list of tuples with indices for image chunk"""
-    chunksize = (img.shape[0]//2, img.shape[0]//2)
+    chunksize = (img.shape[0]//2, img.shape[1]//2)
 
     #list of tuples (begx, endx, begy, endy)
     indices = [(0, chunksize[0], 0, chunksize[1]),
