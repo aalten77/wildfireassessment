@@ -26,7 +26,7 @@ def plot_confusion_matrix(y_true, y_pred, classes, normalize=False, title=None, 
     # Compute confusion matrix
     cm = confusion_matrix(y_true, y_pred)
     # Only use the labels that appear in the data
-    classes = classes[unique_labels(y_true, y_pred)]
+    #classes = classes[unique_labels(y_true, y_pred)]
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
         print("Normalized confusion matrix")
@@ -35,7 +35,7 @@ def plot_confusion_matrix(y_true, y_pred, classes, normalize=False, title=None, 
 
     print(cm)
 
-    fig, ax = plt.subplots(figsize=(5,5))
+    fig, ax = plt.subplots(figsize=(10,10))
     im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
     ax.figure.colorbar(im, ax=ax)
     ax.set_aspect('auto')
