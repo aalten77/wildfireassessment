@@ -1,0 +1,95 @@
+***Starting 10-fold validation for estimator Random Forest***
+Cross validation finished in 33.79083251953125 seconds.
+Avg cross-val metric [0.6980122373161467]
+Saving to filepath model/rf_model.
+------Classification report-----
+Accuracy: 73.44%
+Error rate: 26.56%
+Weighted precision: 68.08%
+Weighted recall: 73.44%
+F1-score: 70.30%
+
+***Starting 10-fold validation for estimator Logistic Regression***
+Cross validation finished in 41.695048332214355 seconds.
+Avg cross-val metric [0.7051394658723701]
+Saving to filepath model/lr_model.
+------Classification report-----
+Accuracy: 74.49%
+Error rate: 25.51%
+Weighted precision: 70.60%
+Weighted recall: 74.49%
+F1-score: 72.12%
+
+***Starting 10-fold validation for estimator Decision Tree***
+Cross validation finished in 23.554729223251343 seconds.
+Avg cross-val metric [0.7149577222445685]
+------Classification report-----
+Accuracy: 73.33%
+Error rate: 26.67%
+Weighted precision: 71.70%
+Weighted recall: 73.33%
+F1-score: 72.28%
+
+***Starting 10-fold validation for estimator Linear SVM One-vs-Rest***
+Cross validation finished in 929.7560746669769 seconds.
+Avg cross-val metric [0.6640556745088207]
+Saving to filepath model/svm_model.
+------Classification report-----
+Accuracy: 70.72%
+Error rate: 29.28%
+Weighted precision: 67.77%
+Weighted recall: 70.72%
+F1-score: 68.56%
+
+***Starting 10-fold validation for estimator Multi-Layer Perceptron***
+Traceback (most recent call last):
+  File "/home/ec2-user/cross_validator.py", line 146, in <module>
+    name_estimator="Multi-Layer Perceptron", bSave=True, filepath="model/mlp_model")
+  File "/home/ec2-user/cross_validator.py", line 22, in cross_validate
+    model = crossval.fit(trainDataDF)
+  File "/home/ec2-user/spark/python/lib/pyspark.zip/pyspark/ml/base.py", line 132, in fit
+  File "/home/ec2-user/spark/python/lib/pyspark.zip/pyspark/ml/tuning.py", line 304, in _fit
+  File "/usr/lib64/python3.7/multiprocessing/pool.py", line 748, in next
+    raise value
+  File "/usr/lib64/python3.7/multiprocessing/pool.py", line 121, in worker
+    result = (True, func(*args, **kwds))
+  File "/home/ec2-user/spark/python/lib/pyspark.zip/pyspark/ml/tuning.py", line 304, in <lambda>
+  File "/home/ec2-user/spark/python/lib/pyspark.zip/pyspark/ml/tuning.py", line 52, in singleTask
+  File "/home/ec2-user/spark/python/lib/pyspark.zip/pyspark/ml/base.py", line 62, in __next__
+  File "/home/ec2-user/spark/python/lib/pyspark.zip/pyspark/ml/base.py", line 106, in fitSingleModel
+  File "/home/ec2-user/spark/python/lib/pyspark.zip/pyspark/ml/base.py", line 130, in fit
+  File "/home/ec2-user/spark/python/lib/pyspark.zip/pyspark/ml/wrapper.py", line 295, in _fit
+  File "/home/ec2-user/spark/python/lib/pyspark.zip/pyspark/ml/wrapper.py", line 292, in _fit_java
+  File "/home/ec2-user/spark/python/lib/py4j-0.10.7-src.zip/py4j/java_gateway.py", line 1257, in __call__
+  File "/home/ec2-user/spark/python/lib/pyspark.zip/pyspark/sql/utils.py", line 63, in deco
+  File "/home/ec2-user/spark/python/lib/py4j-0.10.7-src.zip/py4j/protocol.py", line 328, in get_return_value
+py4j.protocol.Py4JJavaError: An error occurred while calling o34228.fit.
+: java.util.NoSuchElementException: Failed to find a default value for layers
+	at org.apache.spark.ml.param.Params$$anonfun$getOrDefault$2.apply(params.scala:780)
+	at org.apache.spark.ml.param.Params$$anonfun$getOrDefault$2.apply(params.scala:780)
+	at scala.Option.getOrElse(Option.scala:121)
+	at org.apache.spark.ml.param.Params$class.getOrDefault(params.scala:779)
+	at org.apache.spark.ml.PipelineStage.getOrDefault(Pipeline.scala:42)
+	at org.apache.spark.ml.param.Params$class.$(params.scala:786)
+	at org.apache.spark.ml.PipelineStage.$(Pipeline.scala:42)
+	at org.apache.spark.ml.classification.MultilayerPerceptronClassifier$$anonfun$train$1.apply(MultilayerPerceptronClassifier.scala:211)
+	at org.apache.spark.ml.classification.MultilayerPerceptronClassifier$$anonfun$train$1.apply(MultilayerPerceptronClassifier.scala:205)
+	at org.apache.spark.ml.util.Instrumentation$$anonfun$11.apply(Instrumentation.scala:185)
+	at scala.util.Try$.apply(Try.scala:192)
+	at org.apache.spark.ml.util.Instrumentation$.instrumented(Instrumentation.scala:185)
+	at org.apache.spark.ml.classification.MultilayerPerceptronClassifier.train(MultilayerPerceptronClassifier.scala:205)
+	at org.apache.spark.ml.classification.MultilayerPerceptronClassifier.train(MultilayerPerceptronClassifier.scala:114)
+	at org.apache.spark.ml.Predictor.fit(Predictor.scala:118)
+	at org.apache.spark.ml.Predictor.fit(Predictor.scala:82)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.lang.reflect.Method.invoke(Method.java:498)
+	at py4j.reflection.MethodInvoker.invoke(MethodInvoker.java:244)
+	at py4j.reflection.ReflectionEngine.invoke(ReflectionEngine.java:357)
+	at py4j.Gateway.invoke(Gateway.java:282)
+	at py4j.commands.AbstractCommand.invokeMethod(AbstractCommand.java:132)
+	at py4j.commands.CallCommand.execute(CallCommand.java:79)
+	at py4j.GatewayConnection.run(GatewayConnection.java:238)
+	at java.lang.Thread.run(Thread.java:748)
+
