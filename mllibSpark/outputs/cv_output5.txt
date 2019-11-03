@@ -1,0 +1,55 @@
+***Starting 10-fold validation for estimator Random Forest***
+Cross validation finished in 33.831897020339966 seconds.
+Avg cross-val metric [0.6980122373161467]
+Saving to filepath model/rf_model.
+------Classification report-----
+Accuracy: 73.44%
+Error rate: 26.56%
+Weighted precision: 68.08%
+Weighted recall: 73.44%
+F1-score: 70.30%
+
+***Starting 10-fold validation for estimator Logistic Regression***
+Cross validation finished in 41.58214735984802 seconds.
+Avg cross-val metric [0.7051394658723701]
+Saving to filepath model/lr_model.
+------Classification report-----
+Accuracy: 74.49%
+Error rate: 25.51%
+Weighted precision: 70.60%
+Weighted recall: 74.49%
+F1-score: 72.12%
+
+***Starting 10-fold validation for estimator Decision Tree***
+Cross validation finished in 23.316097021102905 seconds.
+Avg cross-val metric [0.7149577222445685]
+Saving to filepath model/dt_model.
+------Classification report-----
+Accuracy: 73.33%
+Error rate: 26.67%
+Weighted precision: 71.70%
+Weighted recall: 73.33%
+F1-score: 72.28%
+
+***Starting 10-fold validation for estimator Linear SVM One-vs-Rest***
+Cross validation finished in 929.8185555934906 seconds.
+Avg cross-val metric [0.6640556745088207]
+Saving to filepath model/svm_model.
+------Classification report-----
+Accuracy: 70.72%
+Error rate: 29.28%
+Weighted precision: 67.77%
+Weighted recall: 70.72%
+F1-score: 68.56%
+
+***Starting 10-fold validation for estimator Multi-Layer Perceptron***
+Cross validation finished in 599.8246917724609 seconds.
+Avg cross-val metric [0.7369584508601018]
+Saving to filepath model/mlp_model.
+------Classification report-----
+Accuracy: 75.76%
+Error rate: 24.24%
+Weighted precision: 73.56%
+Weighted recall: 75.76%
+F1-score: 74.40%
+
