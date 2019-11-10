@@ -4,7 +4,7 @@ from sklearn.metrics import classification_report
 from sklearn.externals import joblib
 from pathlib import Path
 
-def gridSearch(clf, params, scoring, X_train, y_train, X_test, y_test, refit=None, filename="randomForest", cv=5, random=False, n_iter=10):
+def gridSearch(clf, params, scoring, X_train, y_train, X_test, y_test, refit=None, filename="randomForest", cv=5, random=False, n_iter=10, n_jobs=-1):
 
     filepath = Path("./models")
 
@@ -13,9 +13,9 @@ def gridSearch(clf, params, scoring, X_train, y_train, X_test, y_test, refit=Non
 
     if random: # perform random search instead of exhaustive grid search
         print("Random ON")
-        model = RandomizedSearchCV(clf, params, refit=refit, n_iter=n_iter, cv=cv, scoring=scoring, n_jobs=-1)
+        model = RandomizedSearchCV(clf, params, refit=refit, n_iter=n_iter, cv=cv, scoring=scoring, n_jobs=n_jobs)
     else:
-        model = GridSearchCV(clf, params, refit=refit, cv=cv, scoring=scoring, n_jobs=-1)
+        model = GridSearchCV(clf, params, refit=refit, cv=cv, scoring=scoring, n_jobs=n_jobs)
 
     print("Fitting model...")
     model.fit(X_train, y_train)

@@ -31,7 +31,7 @@ def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
     print("Writing to data...")
     for i, fp in enumerate(fps_post):
         print(fp)
-        filename = str(fp).split('\\')[3].split('_')[0]
+        filename = str(fp).split('/')[3].split('_')[0]
 
         print("reading clipped rgb images for {}".format(filename))
         raster_src_post, rgb_post = readRGBImg(fp)
@@ -57,7 +57,7 @@ def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
             print("starting segmentation for chunk {}".format(i))
             img_chunk_post = rgb_post[chunkindextup[0]:chunkindextup[1], chunkindextup[2]:chunkindextup[3], :]
             img_chunk_pre = rgb_pre[chunkindextup[0]:chunkindextup[1], chunkindextup[2]:chunkindextup[3], :]
-            segments = segmentToLabels(img_chunk_pre, n_segments=5000, compactness=15)
+            segments = segmentToLabels(img_chunk_pre, n_segments=5000, compactness=15) 
 
             print("translating segments to image chunk location")
             #add translation to affine for image chunk
@@ -65,7 +65,13 @@ def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
             tup_origin = raster_src_pre.xy(0, 0) # origin coordinates of image
             x_trans = abs(tup[0] - tup_origin[0]) # distance x
             y_trans = abs(tup[1] - tup_origin[1]) # distance y
-            affineTrans = Affine.translation(-x_trans, -y_trans) * raster_src_pre.transform
+            affineTrans = Affine.translation(x_trans, -y_trans) * raster_src_pre.transform
+            print("coords:", tup)
+            print("distance x:", x_trans)
+            print("distance y:", y_trans)
+            print("affine:", affineTrans)
+            print()
+            #continue
 
             print("vectorizing...")
             # Vectorize
@@ -82,6 +88,7 @@ def writeDatasets(fps_post, fps_pre, fp_s2_post, fp_s2_pre):
             print("writing to destination: {}".format(gdf_filename))
             #write to file
             gdf.to_file(gdf_filename)
+            print("\n")
 
 def writeClippedHelper(img, img_transform, img_meta, filename):
     trueColor = rasterio.open(filename, 'w', **img_meta)
